@@ -12,8 +12,10 @@ Python, C#;
 на homemade. Так же для подключения аккаунта оболочка использует токен, который можно получить, создав аккаунт, и получив на него bot - права.
 
 ### Картинки =)
+
 ![prntscrn1](https://user-images.githubusercontent.com/113096503/202991638-e31b8883-b6fe-4fe4-9c52-2b7c15b480d7.png)
 ![prntscrn](https://user-images.githubusercontent.com/113096503/202991644-03cde915-ba2f-4502-b265-246a80410b06.png)
+![image](https://user-images.githubusercontent.com/113096503/205003656-4f3fae67-8733-4493-9c73-7656c7e741a2.png)
 
 ### План Работы
 
