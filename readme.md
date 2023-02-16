@@ -43,5 +43,7 @@ Python, C#;
 ### оболочка 
 от Shali-Choksi (https://github.com/ShailChoksi/lichess-bot)
 
+###
+
 ### Наш FAN движок
 https://datalore.jetbrains.com/notebook/zv3h4nG3nlpHDDNvqvbJeh/SA4UiAYBSKgRGfwC6w3i6l/
