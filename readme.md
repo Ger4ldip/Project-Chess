@@ -43,7 +43,8 @@ Python, C#;
 ### оболочка 
 от Shali-Choksi (https://github.com/ShailChoksi/lichess-bot)
 
-###
+### Подключение
+Чтобы подключить движок к lichess вам надо скачать оболочку по ссылке выше и заменить файлы на хранящиеся в этом репозитории
 
 ### Наш FAN движок
 https://datalore.jetbrains.com/notebook/zv3h4nG3nlpHDDNvqvbJeh/SA4UiAYBSKgRGfwC6w3i6l/
