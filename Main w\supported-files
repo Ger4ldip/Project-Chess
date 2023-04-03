@@ -1,45 +1,49 @@
-from os import remove
 from time import perf_counter
-from math import ceil
 result = '*'
 move_number = 1
 move_turn = 1
 moves50 = 0
-cast = [2, -3, 2, -3]
+cast = [False, False, False, False]  # into True and False
 enpassant = []
 fen = ''
 start_fen = ''
-depth = 3  # set - default, for test use max 10
+depth = 5
 reached_depth = 0
-Board = [[], [], [], [], [], [], [], []]
-for i in range(8):
-    Board[i] = ['.', '.', '.', '.', '.', '.', '.', '.']
 filename = ["first.txt", "second.txt"]
+material_imbalance = False
+fen_same = []
+Board = []
+pawn_value = 100
+bishop_value = 320
+knight_value = 300
+rook_value = 500
+queen_value = 900
+king_value = 30000
+king_coord = []
+opposite_king_coord = []
 
 
-def castle(color):
+def castle_check():
     global cast
-    take_moves = simple_moves(1 - color)
-    castle_possibility = []
-
     if Board[7][4] == '.' or Board[7][4].__str__() != 'K':
-        cast[0] = 0
-        cast[1] = 0
-
+        cast[0] = False
+        cast[1] = False
     if cast[0] != 0 and (Board[7][7] == '.' or Board[7][7].__str__() != 'R'):
-        cast[0] = 0
+        cast[0] = False
     if cast[1] != 0 and (Board[7][0] == '.' or Board[7][0].__str__() != 'R'):
-        cast[1] = 0
-
+        cast[1] = False
     if Board[0][4] == '.' or Board[0][4].__str__() != 'k':
-        cast[2] = 0
-        cast[3] = 0
-
+        cast[2] = False
+        cast[3] = False
     if cast[2] != 0 and (Board[0][7] == '.' or Board[0][7].__str__() != 'r'):
-        cast[2] = 0
+        cast[2] = False
     if cast[3] != 0 and (Board[0][0] == '.' or Board[0][0].__str__() != 'r'):
-        cast[3] = 0
+        cast[3] = False
 
+
+def castle_m(color):
+    take_moves = simple_move(1 - color)
+    castle_possibility = []
     if cast[(1 - color) * 2] != 0 and Board[color * 7][5] == '.' and [color * 7, 5] not in take_moves and \
             Board[color * 7][6] == '.' and [color * 7, 6] not in take_moves:
         castle_possibility.append('short_castle')
@@ -47,11 +51,10 @@ def castle(color):
             Board[color * 7][2] == '.' and [color * 7, 2] not in take_moves and Board[color * 7][1] == '.' and [
         color * 7, 1] not in take_moves:
         castle_possibility.append('long_castle')
-
     return castle_possibility
 
 
-def simple_moves(color):
+def simple_move(color):
     moves = []
     a = 0
     b = 0
@@ -59,30 +62,6 @@ def simple_moves(color):
         while b < 8:
             if Board[a][b] != '.' and Board[a][b].color == color and Board[a][b].moves() != []:
                 moves += Board[a][b].moves()
-            for j in range(len(moves)):
-                if len(moves[j]) == 3:
-                    moves[j].pop(2)
-            b += 1
-        b = 0
-        a += 1
-    return moves
-
-
-def color_moves(color):
-    moves = []
-    a = 0
-    b = 0
-    while a < 8:
-        while b < 8:
-            if Board[a][b] != '.' and Board[a][b].color == color and Board[a][b].moves() != []:
-                oxt = [a, b]
-                lst = Board[a][b].moves()
-                for j in range(len(lst)):
-                    if (len(lst[j])) == 3:
-                        oxt += (lst[j][0], lst[j][1], lst[j][2])
-                    else:
-                        oxt += (lst[j][0], lst[j][1])
-                moves.append(oxt)
             b += 1
         b = 0
         a += 1
@@ -90,84 +69,97 @@ def color_moves(color):
 
 
 def check(color):
-    king_coord = []
-    opposite_king_coord = []
+    global king_coord, opposite_king_coord
     is_check = 0
-    for a in range(8):
-        for b in range(8):
-            if Board[a][b] != '.' and Board[a][b].__str__() == chr(ord('K') + 32 * (1 - color)):
-                king_coord = [a, b]
-            if Board[a][b] != '.' and Board[a][b].__str__() == chr(ord('K') + 32 * color):
-                opposite_king_coord = [a, b]
-    moves = color_moves(1 - color)
-    if abs(opposite_king_coord[1] - king_coord[1]) == 1 and abs(opposite_king_coord[0] - king_coord[0]) == 0:
-        is_check = 1
-        return is_check
-    if abs(opposite_king_coord[1] - king_coord[1]) == 0 and abs(opposite_king_coord[0] - king_coord[0]) == 1:
-        is_check = 1
-        return is_check
-    if abs(opposite_king_coord[1] - king_coord[1]) == 1 and abs(opposite_king_coord[0] - king_coord[0]) == 1:
+    moves = simple_move(1 - color)
+    absx = abs(opposite_king_coord[0] - king_coord[0])
+    absy = abs(opposite_king_coord[1] - king_coord[1])
+    if (absy == 1 and absx == 0) or (absy == 0 and absx == 1) or (absy == 1 and absx == 1):
         is_check = 1
         return is_check
     for h in range(len(moves)):
-        j = 2
-        if len(moves[h]) >= 5 and str(type(moves[h][4])) == "<class 'str'>":
-            k = len(moves[h]) - 1
-            while k >= 4:
-                moves[h].pop(k)
-                k -= 3
-        while j < len(moves[h]):
-            mas = [moves[h][j], moves[h][j + 1]]
-            # print(mas, king_coord)
-            if mas == king_coord:
-                is_check = 1
-                break
-            j += 2
+        if [moves[h][2], moves[h][3]] == king_coord:
+            is_check = 1
+            break
     return is_check
 
 
 def possible_move(color):
     moves = []
-    massiv = color_moves(color)
+    massiv = simple_move(color)
     for d in range(len(massiv)):
-        if len(massiv[d]) >= 5 and str(type(massiv[d][4])) == "<class 'str'>":
-            for k in range((len(massiv[d]) - 2) // 12):
-                if len(massiv[d][4 + k * 12]) <= 8:
-                    Board[massiv[d][0]][massiv[d][1]] = '.'
-                    Board[massiv[d][2]][massiv[d][3]] = Pawn(color, massiv[d][2], massiv[d][3])
-                    if check(color) == 0:
-                        for g in range(4):
-                            moves.append([massiv[d][0], massiv[d][1], massiv[d][2], massiv[d][3], massiv[d][4 + g * 3]])
-                    Board[massiv[d][2]][massiv[d][3]] = '.'
-                    Board[massiv[d][0]][massiv[d][1]] = Pawn(color, massiv[d][0], massiv[d][1])
-                else:
-                    piece = Board[massiv[d][2 + k * 12]][massiv[d][3 + k * 12]]
-                    Board[massiv[d][0]][massiv[d][1]] = '.'
-                    Board[massiv[d][2 + k * 12]][massiv[d][3 + k * 12]] = Pawn(color, massiv[d][2 + k * 12],
-                                                                               massiv[d][3 + k * 12])
-                    if check(color) == 0:
-                        for g in range(4):
-                            moves.append([massiv[d][0], massiv[d][1], massiv[d][k * 12 + 2], massiv[d][k * 12 + 3],
-                                          massiv[d][k * 12 + 4 + g * 3]])
-                    Board[massiv[d][2 + k * 12]][massiv[d][3 + k * 12]] = piece
-                    Board[massiv[d][0]][massiv[d][1]] = Pawn(color, massiv[d][0], massiv[d][1])
-        else:
-            j = 2
-            while j < (len(massiv[d])):
-                moven = [massiv[d][0], massiv[d][1], massiv[d][j], massiv[d][j + 1]]
-                piece = Board[moven[2]][moven[3]]
-                Board[moven[2]][moven[3]] = Board[moven[0]][moven[1]]
-                Board[moven[0]][moven[1]] = '.'
-                Board[moven[2]][moven[3]].x = moven[2]
-                Board[moven[2]][moven[3]].y = moven[3]
-                if check(color) == 0:
-                    moves.append(moven)
-                j += 2
-                Board[moven[0]][moven[1]] = Board[moven[2]][moven[3]]
-                Board[moven[2]][moven[3]] = piece
-                Board[moven[0]][moven[1]].x = moven[0]
-                Board[moven[0]][moven[1]].y = moven[1]
+        piece = Board[massiv[d][2]][massiv[d][3]]
+        Board[massiv[d][2]][massiv[d][3]] = Board[massiv[d][0]][massiv[d][1]]
+        Board[massiv[d][0]][massiv[d][1]] = '.'
+        Board[massiv[d][2]][massiv[d][3]].x = massiv[d][2]
+        Board[massiv[d][2]][massiv[d][3]].y = massiv[d][3]
+        if check(color) == 0:
+            moves.append(massiv[d])
+        Board[massiv[d][0]][massiv[d][1]] = Board[massiv[d][2]][massiv[d][3]]
+        Board[massiv[d][2]][massiv[d][3]] = piece
+        Board[massiv[d][0]][massiv[d][1]].x = massiv[d][0]
+        Board[massiv[d][0]][massiv[d][1]].y = massiv[d][1]
     return moves
+
+
+def fen_code():
+    global moves50, move_turn, move_number, cast, enpassant  # добавить взятия на проходе
+    empt = 0
+    fen_ret = ''
+    for a in range(8):
+        for b in range(8):
+            if Board[a][b] == '.':
+                empt += 1
+            if Board[a][b] != '.':
+                if empt != 0:
+                    fen_ret += str(empt)
+                    empt = 0
+                fen_ret += Board[a][b].__str__()
+        if empt != 0:
+            fen_ret += str(empt)
+            empt = 0
+        fen_ret += '/'
+    fen_ret = fen_ret[:len(fen_ret) - 1]
+    fen_ret += " " + ("w" if move_turn == 1 else "b") + " "
+    if cast == [0, 0, 0, 0]:
+        fen_ret += "-"
+    else:
+        if cast[0] != 0:
+            fen_ret += "K"
+        if cast[1] != 0:
+            fen_ret += "Q"
+        if cast[2] != 0:
+            fen_ret += 'k'
+        if cast[3] != 0:
+            fen_ret += "q"
+    if not enpassant:
+        fen_ret += " "  # сюда взятие на проходе
+        fen_ret += "- "
+    fen_ret += str(moves50) + " " + str(move_number)
+    return fen_ret
+
+
+def uci_move(classification, move):
+    global move_turn
+    if classification == 1:
+        string = chr(ord("a") + move[1]) + str(8 - move[0]) + chr(ord("a") + move[3]) + str(8 - move[2])
+        return string
+    if classification == 2:
+        if move_turn == 0:
+            if move == "short_castle":
+                return "e1g1"
+            else:
+                return "e1c1"
+        else:
+            if move == "short_castle":
+                return "e8g8"
+            else:
+                return "e8c8"
+    if classification == 3:
+        string = chr(ord("a") + move[1]) + str(8 - move[0]) + chr(ord("a") + move[3]) + str(8 - move[2])
+        return string
+    if classification == 4:
+        return move
 
 
 class Piece(object):
@@ -186,32 +178,34 @@ class Pawn(Piece):
     IMG = ('p', 'P')
 
     def moves(self):
-        just_promotion = [[(1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "knight"],
-                          [(1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "bishop"],
-                          [(1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "rook"],
-                          [(1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "queen"]]
-        plus_promotion = [[(1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_knight"],
-                          [(1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_bishop"],
-                          [(1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_rook"],
-                          [(1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_queen"]]
-        minus_promotion = [[(1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_knight"],
-                           [(1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_bishop"],
-                           [(1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_rook"],
-                           [(1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_queen"]]
+        just_promotion = [[self.x, self.y, (1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "knight"],
+                          [self.x, self.y, (1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "bishop"],
+                          [self.x, self.y, (1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "rook"],
+                          [self.x, self.y, (1 - self.color) * 7, self.y, str(self.x) + str(self.y) + "queen"]]
+        plus_promotion = [
+            [self.x, self.y, (1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_knight"],
+            [self.x, self.y, (1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_bishop"],
+            [self.x, self.y, (1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_rook"],
+            [self.x, self.y, (1 - self.color) * 7, self.y + 1, str(self.x) + str(self.y) + "take_+1_queen"]]
+        minus_promotion = [
+            [self.x, self.y, (1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_knight"],
+            [self.x, self.y, (1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_bishop"],
+            [self.x, self.y, (1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_rook"],
+            [self.x, self.y, (1 - self.color) * 7, self.y - 1, str(self.x) + str(self.y) + "take_-1_queen"]]
         moves = []
         cells = [1, -1]
         a = (-self.color) * 2 + 1
         b = (1 - self.color) * 5 + 1
         if self.color + 1 <= self.x <= self.color + 5 and Board[self.x + a][self.y] == '.':
-            moves.append([self.x + a, self.y])
+            moves.append([self.x, self.y, self.x + a, self.y])
             if self.x == self.color * 5 + 1 and Board[self.x + a * 2][self.y] == '.':
-                moves.append([self.x + a * 2, self.y])
+                moves.append([self.x, self.y, self.x + a * 2, self.y])
         if self.x == b and Board[self.x + a][self.y] == '.':
             moves += just_promotion
-        for j in range(len(cells)):
+        for j in range(2):
             if self.color + 1 <= self.x <= self.color + 5 and 0 < self.y + cells[j] < 7 and Board[self.x + a][
                 self.y + cells[j]] != '.' and abs(self.color - Board[self.x + a][self.y + cells[j]].color) == 1:
-                moves.append([self.x + a, self.y + cells[j]])
+                moves.append([self.x, self.y, self.x + a, self.y + cells[j]])
             if self.x == b and 0 < self.y + cells[j] < 7 and Board[self.x + a][self.y + cells[j]] != '.' and abs(
                     self.color - Board[self.x + a][self.y + cells[j]].color) == 1:
                 if cells[j] == 1:
@@ -224,72 +218,56 @@ class Pawn(Piece):
 class Knight(Piece):
     IMG = ('n', 'N')
 
-    def take_move(self, xnew, ynew):
-        lst = []
-        if 0 <= xnew <= 7 and 0 <= ynew <= 7:
-            if Board[xnew][ynew] == '.':
-                lst.append([xnew, ynew])
-            elif abs(self.color - Board[xnew][ynew].color) == 1:
-                lst.append([xnew, ynew])
-        return lst
-
     def moves(self):
         moves = []
         cells = [[-1, -2], [-2, -1], [-2, 1], [-1, 2], [1, 2], [2, 1], [2, -1], [1, -2]]
-        for j in range(len(cells)):
-            moves += Knight.take_move(self, self.x + cells[j][0], self.y + cells[j][1])
+        for j in range(8):
+            xnew = self.x + cells[j][0]
+            ynew = self.y + cells[j][1]
+            if 0 <= xnew <= 7 and 0 <= ynew <= 7 and (Board[xnew][ynew] == '.' or abs(self.color - Board[xnew][ynew].color) == 1):
+                moves.append([self.x, self.y, xnew, ynew])
         return moves
 
 
 class Bishop(Piece):
     IMG = ('b', 'B')
 
-    def take_moves(self, p, j):
-        lst = []
-        xnew = self.x + p
-        ynew = self.y + j
-        while 0 <= xnew <= 7 and 0 <= ynew <= 7:
-            if Board[xnew][ynew] == '.':
-                lst.append([xnew, ynew])
-                xnew += p
-                ynew += j
-            else:
-                if abs(self.color - Board[xnew][ynew].color) == 1:
-                    lst.append([xnew, ynew])
-                break
-        return lst
-
     def moves(self):
         moves = []
         cells = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
-        for j in range(len(cells)):
-            moves += Bishop.take_moves(self, cells[j][0], cells[j][1])
+        for j in range(4):
+            xnew = self.x + cells[j][0]
+            ynew = self.y + cells[j][1]
+            while 0 <= xnew <= 7 and 0 <= ynew <= 7:
+                if Board[xnew][ynew] == '.':
+                    moves.append([self.x, self.y, xnew, ynew])
+                    xnew += cells[j][0]
+                    ynew += cells[j][1]
+                else:
+                    if abs(self.color - Board[xnew][ynew].color) == 1:
+                        moves.append([self.x, self.y, xnew, ynew])
+                    break
         return moves
 
 
 class Rook(Piece):
     IMG = ('r', 'R')
 
-    def take_moves(self, g, j):
-        lst = []
-        xnew = self.x + g
-        ynew = self.y + j
-        while 0 <= xnew <= 7 and 0 <= ynew <= 7:
-            if Board[xnew][ynew] == '.':
-                lst.append([xnew, ynew])
-                xnew += g
-                ynew += j
-            else:
-                if abs(self.color - Board[xnew][ynew].color) == 1:
-                    lst.append([xnew, ynew])
-                break
-        return lst
-
     def moves(self):
         moves = []
         cells = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        for j in range(len(cells)):
-            moves += Rook.take_moves(self, cells[j][0], cells[j][1])
+        for j in range(4):
+            xnew = self.x + cells[j][0]
+            ynew = self.y + cells[j][1]
+            while 0 <= xnew <= 7 and 0 <= ynew <= 7:
+                if Board[xnew][ynew] == '.':
+                    moves.append([self.x, self.y, xnew, ynew])
+                    xnew += cells[j][0]
+                    ynew += cells[j][1]
+                else:
+                    if abs(self.color - Board[xnew][ynew].color) == 1:
+                        moves.append([self.x, self.y, xnew, ynew])
+                    break
         return moves
 
 
@@ -306,20 +284,14 @@ class Queen(Piece):
 class King(Piece):
     IMG = ('k', 'K')
 
-    def take_move(self, xnew, ynew):
-        lst = []
-        if 0 <= xnew <= 7 and 0 <= ynew <= 7 and Board[xnew][ynew] == '.':
-            lst.append([xnew, ynew])
-        if 0 <= xnew <= 7 and 0 <= ynew <= 7 and Board[xnew][ynew] == '.' and Board[xnew][ynew] != '.' and abs(
-                Board[xnew][ynew].color - self.color) == 1:
-            lst.append([xnew, ynew])
-        return lst
-
     def moves(self):
         king_cells = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]
         moves = []
         for j in range(len(king_cells)):
-            moves += King.take_move(self, self.x + king_cells[j][0], self.y + king_cells[j][1])
+            xnew = self.x + king_cells[j][0]
+            ynew = self.y + king_cells[j][1]
+            if 0 <= xnew <= 7 and 0 <= ynew <= 7 and (Board[xnew][ynew] == '.' or abs(Board[xnew][ynew].color - self.color) == 1):
+                moves.append([self.x, self.y, xnew, ynew])
         return moves
 
 
@@ -327,26 +299,7 @@ def print_board():
     printboard = ''
     for y in range(8):
         printboard += ''.join(map(str, Board[y])) + "\n"
-        # FEN += ''.join(map(str, Board[y])) + "/"
     return printboard
-
-
-def print_move(moven):
-    letter = Board[moven[2]][moven[3]].__str__()
-    if letter in ['p', 'P']:
-        letter = ''
-    if letter in ['k', 'K']:
-        letter = 'K'
-    if letter in ['n', 'N']:
-        letter = 'N'
-    if letter in ['b', 'B']:
-        letter = 'B'
-    if letter in ['q', 'Q']:
-        letter = 'Q'
-    if letter in ['r', 'R']:
-        letter = 'R'
-    printing = str(letter) + str(chr(ord('a') + moven[3])) + str(8 - moven[2]) + ' '
-    return printing
 
 
 def do_move(moven):
@@ -406,6 +359,7 @@ def castle_move(color, typo):
         Board[vert][0] = '.'
 
 
+# should it exist?
 def game_result(moven):
     flag = 0
     global moves50, result
@@ -435,8 +389,7 @@ def mate(moves):
 
 
 def fen_get():
-    global fen, move_turn, cast, moves50, move_number, Board
-    # print("HERE")
+    global fen, move_turn, cast, moves50, move_number, Board, king_coord, opposite_king_coord, pawn_value, bishop_value, knight_value, rook_value, queen_value, knight_value
     Board = [[], [], [], [], [], [], [], []]
     for y in range(8):
         Board[y] = ['.', '.', '.', '.', '.', '.', '.', '.']
@@ -456,9 +409,11 @@ def fen_get():
             y += 1
         if fen[j] == 'k' and amount_of_slash < 8:
             Board[x][y] = King(0, x, y)
+            opposite_king_coord = [x, y]
             y += 1
         if fen[j] == 'K' and amount_of_slash < 8:
             Board[x][y] = King(1, x, y)
+            king_coord = [x, y]
             y += 1
         if fen[j] == 'b' and amount_of_slash < 8:
             Board[x][y] = Bishop(0, x, y)
@@ -483,7 +438,7 @@ def fen_get():
             y += 1
         if fen[j] == 'N':
             Board[x][y] = Knight(1, x, y)
-            y += 1
+            y += 1  # j += 1?
         if fen[j] == '/':
             x += 1
             y = 0
@@ -495,14 +450,17 @@ def fen_get():
             move_turn = 1
         if fen[j] == 'b' and amount_of_slash >= 8:
             move_turn = 0
+            king_coord += [opposite_king_coord[0], opposite_king_coord[1]]
+            opposite_king_coord = [king_coord[0], king_coord[1]]
+            king_coord = [king_coord[2], king_coord[3]]
         if amount_of_slash >= 8 and fen[j] == 'K':
-            cast[0] = 2
+            cast[0] = True
         if amount_of_slash >= 8 and fen[j] == 'Q':
-            cast[1] = -3
+            cast[1] = True
         if amount_of_slash >= 8 and fen[j] == 'k':
-            cast[2] = 2
+            cast[2] = True
         if amount_of_slash >= 8 and fen[j] == 'q':
-            cast[3] = -3
+            cast[3] = True
         if amount_of_slash >= 8 and 48 <= ord(fen[j]) <= 57 and fir == 0:
             st = fen[j]
             while 48 <= ord(fen[j]) <= 57 and j < len(fen) - 1:
@@ -578,227 +536,335 @@ def check_en_passant(mover, color):
         return 1
 
 
-def all_moves(fenget):
-    # ЗДЕСЬ FENGET, так как сюда мы будем посылать позицию
+def all_moves():
     global fen, move_turn
-    fen = fenget
-    cur_moves = []
     if result == '*':
         mate(possible_move(move_turn))
         if result != '*':
-            return 0
+            return []
         cur_moves = possible_move(move_turn)
-        cur_moves += castle(move_turn)
-        if len(enpassant) != 0:
-            for y in range(len(enpassant)):
-                if check_en_passant(enpassant[y], move_turn) == 0:
-                    cur_moves.append(enpassant[y])
-    return cur_moves
+        castle_check()
+        cur_moves += castle_m(move_turn)
+        for y in range(len(enpassant)):
+            if check_en_passant(enpassant[y], move_turn) == 0:
+                cur_moves.append(enpassant[y])
+        return cur_moves
 
 
 def move_decision(move):
-    global moves50, move_turn, cast
-
+    global moves50, move_turn, cast, move_number
     if move_turn == 1:
         move_turn = 0
     else:
         move_turn = 1
-
-    if str(type(move)) == "<class 'list'>" and len(move) == 4:  # УО - 1
+        move_number += 1
+    if str(type(move)) == "<class 'list'>" and len(move) == 4:
         if Board[move[0]][move[1]].__str__() not in ["p", "P"]:
             moves50 += 1
         else:
             moves50 = 0
         do_move(move)
-        castle(1 - move_turn)
+        castle_check()
         return uci_move(1, move)
-
-    if str(type(move)) == "<class 'str'>":  # УО - 2
+    if str(type(move)) == "<class 'str'>":
         castle_move(1 - move_turn, move)
         moves50 += 1
-        castle(1 - move_turn)
+        castle_check()
         return uci_move(2, move)
-
-    if move[4][:10] == "en_passant":  # УО - 3
+    if move[4][:10] == "en_passant":
         do_enpassant(move)
         moves50 = 0
-        castle(1 - move_turn)
+        castle_check()
         return uci_move(3, move)
     else:
-        moves50 = 0  # УО - 4
-        castle(1 - move_turn)
+        moves50 = 0
+        castle_check()
         return uci_move(4, promotion(1 - move_turn, move))
 
 
 def enumeration():
-    global start_fen, move_turn, fen
-    moves = all_moves(fen)
+    global start_fen, move_turn, fen, material_imbalance, fen_same
+    moves = all_moves()
     sequence = []
+    seq = []
+    evals = []
     for k in range(len(moves)):
         sequence.append([move_decision(moves[k]), fen_code(), evaluation()])
-        fen_get()
-    return sequence
+        evals.append([k, sequence[k][2], material_imbalance])
+        fen_get()  # to start position
+        material_imbalance = False
+    lena = len(evals)
+    if move_turn == 1:
+        best = - 1000000
+        for h in range(lena):
+            if evals[h][1] > best and not evals[h][2]:
+                best = evals[h][1]
+    else:
+        best = 1000000
+        for h in range(lena):
+            if evals[h][1] < best and not evals[h][2]:
+                best = evals[h][1]
+    h = 0
+    while h < lena:
+        if not evals[h][2] and abs(best - evals[h][1]) >= 30:
+            evals.pop(h)
+            lena -= 1
+        # if evals[h][2]:
+        #     # print(material_disbalance(sequence[evals[h][0]][1], best, sequence[evals[h][0]][0]))
+        #     # st = perf_counter()
+        #     if material_disbalance(sequence[evals[h][0]][1], best, sequence[evals[h][0]][0]) == 0:
+        #         # analitics.append(perf_counter() - st)
+        #         evals.pop(h)
+        #         lena -= 1
+        #         h -= 1
+        else:
+            h += 1
+    if reached_depth <= 5:
+        lena = len(evals)
+        y = 0
+        while y < lena:
+            fenar = sequence[evals[y][0]][1]
+            fenar = fenar[:len(fenar) - 4]
+            if fenar in fen_same:
+                lena -= 1
+                evals.pop(y)
+            else:
+                y += 1
+        lena = len(evals)
+        z = 0
+        while z < lena:
+            fc = sequence[evals[z][0]][1]
+            fc = fc[:len(fc) - 4]
+            z += 1
+            fen_same.append(fc)
+    for h in range(lena):
+        seq.append(sequence[evals[h][0]])
+    return seq
 
 
-def evaluation():
-    pawn_value = 100
-    bishop_value = 320
-    knight_value = 300
-    rook_value = 500
-    queen_value = 900
-    king_value = 30000
-    black = 0
-    white = 0
+def material_difference():
+    global pawn_value, bishop_value, knight_value, rook_value, queen_value, knight_value
+    evalu = 0
     for k in range(8):
         for p in range(8):
             if Board[k][p] != '.':
                 if Board[k][p].__str__() == 'p':
-                    black += pawn_value
+                    evalu -= pawn_value
                 if Board[k][p].__str__() == 'n':
-                    black += knight_value
+                    evalu -= knight_value
                 if Board[k][p].__str__() == 'b':
-                    black += bishop_value
+                    evalu -= bishop_value
                 if Board[k][p].__str__() == 'r':
-                    black += rook_value
+                    evalu -= rook_value
                 if Board[k][p].__str__() == 'q':
-                    black += queen_value
+                    evalu -= queen_value
                 if Board[k][p].__str__() == 'k':
-                    black += king_value
+                    evalu -= king_value
                 if Board[k][p].__str__() == 'P':
-                    white += pawn_value
+                    evalu += pawn_value
                 if Board[k][p].__str__() == 'N':
-                    white += knight_value
+                    evalu += knight_value
                 if Board[k][p].__str__() == 'B':
-                    white += bishop_value
+                    evalu += bishop_value
                 if Board[k][p].__str__() == 'R':
-                    white += rook_value
+                    evalu += rook_value
                 if Board[k][p].__str__() == 'Q':
-                    white += queen_value
+                    evalu += queen_value
                 if Board[k][p].__str__() == 'K':
-                    white += king_value
-    evalu = (white - black) / 100
-    if evalu > 0:
-        evalu = "+" + str(evalu)
-    else:
-        evalu = str(evalu)
+                    evalu += king_value
     return evalu
 
 
-def fen_code():
-    global moves50, move_turn, move_number, cast, enpassant  # добавить взятия на проходе
-    empt = 0
-    fen_ret = ''
-    for k in range(8):
-        for v in range(8):
-            if Board[k][v] == '.':
-                empt += 1
-            if empt != 0:
-                if v < 7:
-                    if Board[k][v + 1] != '.':
-                        fen_ret += str(empt)
-                        empt = 0
-                else:
-                    fen_ret += str(empt)
-                    empt = 0
-            if Board[k][v].__str__() == 'p':
-                fen_ret += 'p'
-                empt = 0
-            if Board[k][v].__str__() == 'P':
-                fen_ret += 'P'
-                empt = 0
-            if Board[k][v].__str__() == 'k':
-                fen_ret += 'k'
-                empt = 0
-            if Board[k][v].__str__() == 'K':
-                fen_ret += 'K'
-                empt = 0
-            if Board[k][v].__str__() == 'n':
-                fen_ret += 'n'
-                empt = 0
-            if Board[k][v].__str__() == 'N':
-                fen_ret += 'N'
-                empt = 0
-            if Board[k][v].__str__() == 'b':
-                fen_ret += 'b'
-                empt = 0
-            if Board[k][v].__str__() == 'B':
-                fen_ret += 'B'
-                empt = 0
-            if Board[k][v].__str__() == 'r':
-                fen_ret += 'r'
-                empt = 0
-            if Board[k][v].__str__() == 'R':
-                fen_ret += 'R'
-                empt = 0
-            if Board[k][v].__str__() == 'q':
-                fen_ret += 'q'
-                empt = 0
-            if Board[k][v].__str__() == 'Q':
-                fen_ret += 'Q'
-                empt = 0
-        if k != 7:
-            fen_ret += "/"
-    fen_ret += " " + ("w" if move_turn == 1 else "b") + " "
-    if cast[0] != 0:
-        fen_ret += "K"
-    if cast[1] != 0:
-        fen_ret += "Q"
-    if cast[2] != 0:
-        fen_ret += 'k'
-    if cast[3] != 0:
-        fen_ret += "q"
-    if cast == [0, 0, 0, 0]:
-        fen_ret += "-"
-    if not enpassant:
-        fen_ret += " "  # сюда взятие на проходе
-        fen_ret += "- "
-    fen_ret += str(moves50) + " " + str(move_number)
-    return fen_ret
+def evaluation():
+    global material_imbalance
+    evalu = material_difference()
+    if evalu != 0:
+        material_imbalance = True
+    evalu += opening()
+    return evalu
 
 
-def uci_move(classification, move):
-    global move_turn
-    if classification == 1:
-        string = chr(ord("a") + move[1]) + str(8 - move[0]) + chr(ord("a") + move[3]) + str(8 - move[2])
-        return string
+def opening():
+    global Board, move_number, move_turn, cast
 
-    if classification == 2:
-        if move_turn == 0:
-            if move == "short_castle":
-                return "e1g1"
-            else:
-                return "e1c1"
-        else:
-            if move == "short_castle":
-                return "e8g8"
-            else:
-                return "e8c8"
-    if classification == 3:
-        string = chr(ord("a") + move[1]) + str(8 - move[0]) + chr(ord("a") + move[3]) + str(8 - move[2])
-        return string
-    if classification == 4:
-        return move
+    def check_queen():  # in fen_get()
+        for a in range(7):
+            for b in range(7):
+                if Board[a][b] != '.' and Board[a][b].__str__() == chr(ord("Q") + 32 * (1 - move_turn)):
+                    return 1
+        return 0
+
+    evalu = 0
+    if Board[4][3] != '.' and Board[4][3].__str__() == 'P':  # d4
+        evalu += 50
+        # if Board[3][5] != '.' and Board[3][5].__str__() == 'p':
+        #     evalu += 20 # WHAT IS THAT?
+        if move_number in [1, 2] and Board[3][4] != '.' and Board[3][4].__str__() == 'p':  # d4-e5
+            evalu += 50
+    if Board[3][3] != '.' and Board[3][3].__str__() == 'p':
+        evalu -= 50
+        if move_turn == 1 and move_number in [1, 2] and Board[4][4] != '.' and Board[4][4].__str__() == 'P':
+            evalu += 40
+    if Board[4][4] != '.' and Board[4][4].__str__() == 'P':
+        evalu += 60
+    if Board[3][4] != '.' and Board[3][4].__str__() == 'p':
+        evalu -= 60
+    if Board[5][0] != '.' and Board[5][0].__str__() == 'N':
+        evalu -= 50
+    if Board[5][7] != '.' and Board[5][7].__str__() == 'N':
+        evalu -= 50
+    if Board[2][0] != '.' and Board[2][0].__str__() == 'n':
+        evalu += 50
+    if Board[2][7] != '.' and Board[2][7].__str__() == 'n':
+        evalu += 50
+    if Board[5][2] != '.' and Board[5][2].__str__() == 'N':
+        evalu += 40
+        if Board[6][2] != '.' and Board[6][2].__str__() == 'P':
+            evalu -= 20
+    if Board[5][5] != '.' and Board[5][5].__str__() == 'N':
+        evalu += 40
+        if Board[3][4] != '.' and Board[3][4].__str__() == 'p' and move_number == 2:
+            evalu += 50
+    if Board[2][2] != '.' and Board[2][2].__str__() == 'n':
+        evalu -= 40
+        if Board[1][2] != '.' and Board[1][2].__str__() == 'p':
+            evalu += 20
+    if Board[2][5] != '.' and Board[2][5].__str__() == 'n':
+        evalu -= 40
+    if Board[5][2] != '.' and Board[5][2].__str__() == 'P':
+        evalu += 20
+    if Board[2][2] != '.' and Board[2][2].__str__() == 'p':
+        evalu -= 20
+    if Board[2][3] != '.' and Board[2][3].__str__() == 'p':
+        evalu -= 10
+    if Board[5][3] != '.' and Board[5][3].__str__() == 'P':
+        evalu += 10
+    if Board[1][5] == '.':  # check if we have opposite color queen
+        evalu += 80
+        if check_queen() == 0:
+            evalu -= 70
+        if Board[1][7] == '.':
+            if check_queen() == 0:
+                evalu -= 45
+            evalu += 60
+    if Board[6][5] == '.':
+        if check_queen() == 0:
+            evalu += 70
+        evalu -= 80
+        if Board[6][7] == '.':
+            if check_queen() == 0:
+                evalu += 45
+            evalu -= 60
+    if Board[3][5] != '.' and Board[3][5].__str__() == 'p':
+        evalu -= 20
+    if Board[4][5] != '.' and Board[4][5].__str__() == 'P':
+        evalu += 20
+    if Board[5][0] != '.' and Board[5][0].__str__() == 'P':
+        evalu += 10
+    if Board[2][0] != '.' and Board[2][0].__str__() == 'p':
+        evalu -= 10
+    if Board[5][1] != '.' and Board[5][1].__str__() == 'P':
+        evalu += 20
+    if Board[2][1] != '.' and Board[2][1].__str__() == 'p':
+        evalu -= 20
+    if Board[5][7] != '.' and Board[5][7].__str__() == 'P':
+        evalu += 20
+    if Board[2][7] != '.' and Board[2][7].__str__() == 'p':
+        evalu -= 20
+    if cast[0] != 2:
+        evalu -= 90
+    if cast[1] != -3:
+        evalu -= 15
+    if cast[2] != 2:
+        evalu += 90
+    if cast[3] != -3:
+        evalu += 15
+    if Board[4][6] != '.' and Board[4][6].__str__() == 'P':
+        evalu -= 130
+    if Board[3][6] != '.' and Board[4][6].__str__() == 'p':
+        evalu += 130
+    if Board[4][1] != '.' and Board[4][1].__str__() == 'P':
+        evalu -= 50
+    if Board[3][1] != '.' and Board[3][1].__str__() == 'p':
+        evalu += 50
+    if Board[5][4] != '.' and Board[5][4].__str__() == 'P':
+        evalu += 35
+        if Board[5][3] == '.' or Board[5][3].__str__() != 'P':
+            evalu -= 30
+        if Board[5][2] == '.' or Board[5][2].__str__() != 'P':
+            evalu -= 35
+    if Board[2][4] != '.' and Board[2][4].__str__() == 'p':
+        evalu -= 35
+        if Board[2][3] == '.' or Board[2][3].__str__() != 'p':
+            evalu += 30
+        if Board[2][2] == '.' or Board[2][2].__str__() != 'p':
+            evalu += 35
+    if Board[5][6] != '.' and Board[5][6].__str__() == 'P':
+        evalu += 15
+    if Board[2][6] != '.' and Board[2][6].__str__() == 'p':
+        evalu -= 15
+    if Board[4][7] != '.' and Board[4][7].__str__() == 'P':
+        evalu -= 30
+    if Board[3][7] != '.' and Board[3][7].__str__() == 'p':
+        evalu += 30
+    if Board[3][2] != '.' and Board[3][2].__str__() == 'p':
+        evalu -= 40
+    if Board[4][2] != '.' and Board[4][2].__str__() == 'P':
+        evalu += 40
+    # Добавить оценку позиций слонов
+    # Добавить оцнеку слабых и изолированных пешек
+    # Добавить оценку положениям ферзя. чтобы машина не стремилась ходить ферзём в некоторых позициях
+    # Добавить, чтобы оно не ходило одной и той же фигурой дважды
+    if Board[0][1] == '.' or Board[0][1].__str__() != 'n':
+        if Board[2][0] == '.' or Board[2][0].__str__() != 'n':
+            if Board[2][2] == '.' or Board[2][2].__str__() != 'n':
+                if Board[1][3] == '.' or Board[1][3].__str__() != 'n':
+                    evalu += 50
+    if Board[0][6] == '.' or Board[0][6].__str__() != 'n':
+        if Board[2][7] == '.' or Board[2][7].__str__() != 'n':
+            if Board[2][5] == '.' or Board[2][5].__str__() != 'n':
+                if Board[1][4] == '.' or Board[1][4].__str__() != 'n':
+                    evalu += 50
+    return evalu
+
+
+def material_disbalance(fent, best, s):  # here is the imbalanced position
+    global fen, move_turn, material_imbalance
+    move_turn = 1 - move_turn
+    # set Board to norm?
+    # seq = []
+    fen = fent
+    fen_get()
+    posmoves = all_moves()
+    for k in range(len(posmoves)):
+        s = s + " " + move_decision(posmoves[k])
+        e = evaluation()
+        if not material_imbalance and abs(best - e) <= 30:  # clearly 0.6?
+            return 0
+            # seq.append([s, fen_code(), e])
+            # break
+        if check(move_turn) == 1:
+            return 1
+            # seq.append([s, fen_code(), e])
+        fen = fent
+        fen_get()
+        material_imbalance = False
+    move_turn = 1 - move_turn
+    return 0
 
 
 def read_str(st):
-    mas = []
-    count = 0
-    new_str = ''
-    while count < len(st):
-        if st[count] == "'":
-            count += 1
-            while st[count] != "'":
-                new_str += st[count]
-                count += 1
-        count += 1
-        if new_str != '':
-            mas.append(new_str)
-        new_str = ''
-    return mas
+    mars = []
+    start = 1
+    for count in range(len(st)):
+        if st[count] == ',':
+            mars.append(st[start:count-1])
+            start = count + 2
+    return mars
 
 
 def search():
-    global start_fen, fen, filename, reached_depth
+    global start_fen, fen, filename, reached_depth, fen_same
     nodes = 0
     time_for_nodes = perf_counter()
     start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -806,41 +872,43 @@ def search():
     fen_get()
     got = enumeration()
     nodes += len(got)
-    file = open("first.txt", "w")
     with open("first.txt", "w") as f:
         for d in range(len(got)):
-            f.write(str(got[d]))
+            f.write(str(got[d])[1:len(str(got[d])) - 1])
             f.write("\n")
-    file.close()
     reached_depth += 1
     while reached_depth <= depth:
-        file = open(filename[0], "r")
-        file2 = open(filename[1], "w")
-        previous = [1]
-        with open(filename[1], "w") as f2:
-            while previous:
-                previous = read_str(file.readline())
-                if previous:
-                    fen = previous[1]
-                    fen_get()
-                    got = enumeration()
-                    nodes += len(got)
-                    for f in range(len(got)):
-                        got[f][0] = previous[0] + " " + got[f][0]
-                    for f in range(len(got)):
-                        f2.write(str(got[f]))
-                        f2.write("\n")
+        with open(filename[0], "r") as file:
+            previous = [1]
+            with open(filename[1], "w") as f2:
+                while previous:
+                    previous = read_str(file.readline())
+                    if previous:
+                        fen = previous[1]
+                        fen_get()
+                        got = enumeration()
+                        nodes += len(got)
+                        for f in range(len(got)):
+                            got[f][0] = previous[0] + " " + got[f][0]
+                        for f in range(len(got)):
+                            f2.write(str(got[f])[1:len(str(got[f])) - 1])
+                            f2.write("\n")
+        fen_same = []
         filename = [filename[1], filename[0]]
         reached_depth += 1
         print(reached_depth)
-        file.close()
-        file2.close()
     time_for_nodes = perf_counter() - time_for_nodes
-    remove("first.txt")
-    remove("second.txt")
     return [nodes, time_for_nodes]
 
 
-mas = search()
-print(ceil(mas[1]))
-print(str(mas[0]//mas[1]) + " positions per second")
+def main():
+    mas = search()
+    print("Reached depth: ", reached_depth)
+    print("Positions checked: ", mas[0])
+    print("Time used: ", mas[1])
+    print(str(mas[0] // mas[1]) + " positions per second")
+    print("WSOC #9.3.4.10")
+
+
+if __name__ == "__main__":
+    main()
