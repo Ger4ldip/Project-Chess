@@ -17,7 +17,8 @@ Python, C#;
 ![prntscrn](https://user-images.githubusercontent.com/113096503/202991644-03cde915-ba2f-4502-b265-246a80410b06.png)
 ![image](https://user-images.githubusercontent.com/113096503/205003656-4f3fae67-8733-4493-9c73-7656c7e741a2.png)
 ![image](https://user-images.githubusercontent.com/113096503/229430371-f445b47d-9fc1-48f1-898a-8f1342b97ee0.png)
-![image](https://user-images.githubusercontent.com/113096503/229430668-c99fe4b9-2687-44a6-8067-e0dcb07fcee0.png)
+![image](https://user-images.githubusercontent.com/113096503/229430779-b5ef845d-7eca-488a-b58e-0f1faa991889.png)
+
 
 
 
