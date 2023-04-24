@@ -1,0 +1,927 @@
+import sys
+from time import perf_counter
+from random import randint
+import logging
+logger = logging.getLogger(__name__)
+result = '*'
+move_number = 1
+move_turn = 1
+moves50 = 0
+cast = [False, False, False, False]  # into True and False
+fen = ''
+start_fen = ''
+depth = 7
+reached_depth = 0
+filename = ["first.txt", "second.txt"]
+material_imbalance = False
+Board = []
+king_coord = []
+knight_cells = [[-1, -2], [-2, -1], [-2, 1], [-1, 2], [1, 2], [2, 1], [2, -1], [1, -2]]
+bishop_cells = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+rook_cells = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+king_cells = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]
+nodes = 0
+first_depth = True
+piece_move = []
+args = []
+
+
+class Piece(object):
+    IMG = None
+
+    def __init__(self, color, x, y):
+        self.color = color
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return self.IMG[0 if self.color == 0 else 1]
+
+
+class Pawn(Piece):
+    IMG = ('p', 'P')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        pieces = ["n", "b", "r", "q"]
+        a = -2 * self.color + 1
+        if Board[self.x + a][self.y] == '.':
+            piece_move.append([self.x, self.y, self.x + a, self.y])
+            if self.x + a == 7 - 7 * self.color:
+                piece_move.pop(len(piece_move) - 1)
+                for i in range(4):
+                    piece_move.append([self.x, self.y, self.x + a, self.y, pieces[i]])
+            if self.x == 5 * self.color + 1 and Board[self.x + 2 * a][self.y] == '.':
+                piece_move.append([self.x, self.y, self.x + 2 * a, self.y])
+        if self.y - 1 >= 0 and Board[self.x + a][self.y - 1] != '.' and Board[self.x + a][self.y - 1].color == 1 - self.color:
+            piece_move.append([self.x, self.y, self.x + a, self.y - 1])
+            if self.x + a == 7 - 7 * self.color:
+                piece_move.pop(len(piece_move) - 1)
+                for i in range(4):
+                    piece_move.append([self.x, self.y, self.x + a, self.y - 1, pieces[i]])
+        if self.y + 1 <= 7 and Board[self.x + a][self.y + 1] != '.' and Board[self.x + a][self.y + 1].color == 1 - self.color:
+            piece_move.append([self.x, self.y, self.x + a, self.y + 1])
+            if self.x + a == 7 - 7 * self.color:
+                piece_move.pop(len(piece_move) - 1)
+                for i in range(4):
+                    piece_move.append([self.x, self.y, self.x + a, self.y + 1, pieces[i]])
+        return piece_move
+
+
+class Knight(Piece):
+    IMG = ('n', 'N')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        for j in range(8):
+            xnew = self.x + knight_cells[j][0]
+            ynew = self.y + knight_cells[j][1]
+            if 0 <= xnew <= 7 and 0 <= ynew <= 7 and (Board[xnew][ynew] == '.' or abs(self.color - Board[xnew][ynew].color) == 1):
+                piece_move.append([self.x, self.y, xnew, ynew])
+        return piece_move
+
+
+class Bishop(Piece):
+    IMG = ('b', 'B')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        for j in range(4):
+            xnew = self.x + bishop_cells[j][0]
+            ynew = self.y + bishop_cells[j][1]
+            while 0 <= xnew <= 7 and 0 <= ynew <= 7:
+                if Board[xnew][ynew] == '.':
+                    piece_move.append([self.x, self.y, xnew, ynew])
+                    xnew += bishop_cells[j][0]
+                    ynew += bishop_cells[j][1]
+                else:
+                    if abs(self.color - Board[xnew][ynew].color) == 1:
+                        piece_move.append([self.x, self.y, xnew, ynew])
+                    break
+        return piece_move
+
+
+class Rook(Piece):
+    IMG = ('r', 'R')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        for j in range(4):
+            xnew = self.x + rook_cells[j][0]
+            ynew = self.y + rook_cells[j][1]
+            while 0 <= xnew <= 7 and 0 <= ynew <= 7:
+                if Board[xnew][ynew] == '.':
+                    piece_move.append([self.x, self.y, xnew, ynew])
+                    xnew += rook_cells[j][0]
+                    ynew += rook_cells[j][1]
+                else:
+                    if abs(self.color - Board[xnew][ynew].color) == 1:
+                        piece_move.append([self.x, self.y, xnew, ynew])
+                    break
+        return piece_move
+
+
+class Queen(Piece):
+    IMG = ('q', 'Q')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        piece_move += Rook(self.color, self.x, self.y).moves()
+        piece_move += Bishop(self.color, self.x, self.y).moves()
+        return piece_move
+
+
+class King(Piece):
+    IMG = ('k', 'K')
+
+    def moves(self):
+        global piece_move
+        piece_move = []
+        for j in range(len(king_cells)):
+            xnew = self.x + king_cells[j][0]
+            ynew = self.y + king_cells[j][1]
+            if 0 <= xnew <= 7 and 0 <= ynew <= 7 and (Board[xnew][ynew] == '.' or abs(Board[xnew][ynew].color - self.color) == 1):
+                piece_move.append([self.x, self.y, xnew, ynew])
+        return piece_move
+
+
+def castle_move(typo, vert):
+    if typo == 'short_castle':
+        Board[vert][6] = Board[vert][4]
+        Board[vert][6].x = vert
+        Board[vert][6].y = 6
+        Board[vert][4] = '.'
+        Board[vert][5] = Board[vert][7]
+        Board[vert][5].x = vert
+        Board[vert][5].y = 5
+        Board[vert][7] = '.'
+        if vert == 0:
+            return "e8g8"
+        else:
+            return "e1g1"
+    if typo == 'long_castle':
+        Board[vert][2] = Board[vert][4]
+        Board[vert][2].x = vert
+        Board[vert][2].y = 2
+        Board[vert][4] = '.'
+        Board[vert][3] = Board[vert][0]
+        Board[vert][3].x = vert
+        Board[vert][3].y = 3
+        Board[vert][0] = '.'
+        if vert == 0:
+            return "e8c8"
+        else:
+            return "e1c1"
+
+
+def fen_code():
+    global moves50, move_turn, move_number, cast
+    empt = 0
+    fen_ret = ''
+    for a in range(8):
+        for b in range(8):
+            if Board[a][b] == '.':
+                empt += 1
+            if Board[a][b] != '.':
+                if empt != 0:
+                    fen_ret += str(empt)
+                    empt = 0
+                fen_ret += Board[a][b].__str__()
+        if empt != 0:
+            fen_ret += str(empt)
+            empt = 0
+        fen_ret += '/'
+    fen_ret = fen_ret[:len(fen_ret) - 1]
+    fen_ret += " " + ("w" if move_turn == 1 else "b") + " "
+    if cast == [0, 0, 0, 0]:
+        fen_ret += "-"
+    else:
+        if cast[0]:
+            fen_ret += "K"
+        if cast[1]:
+            fen_ret += "Q"
+        if cast[2]:
+            fen_ret += 'k'
+        if cast[3]:
+            fen_ret += "q"
+    fen_ret += " - " + str(moves50) + " " + str(move_number)
+    return fen_ret
+
+
+def fen_get():
+    global fen, move_turn, cast, moves50, move_number, Board, king_coord
+    cast = [False, False, False, False]
+    Board = [[], [], [], [], [], [], [], []]
+    opposite_king_coord = []
+    for y in range(8):
+        Board[y] = ['.', '.', '.', '.', '.', '.', '.', '.']
+    amount_of_slash = 0
+    j = 0
+    x = 0
+    y = 0
+    fir = False
+    lena = len(fen)
+    while j < lena:
+        if amount_of_slash < 8:
+            point = fen[j]
+            if 49 <= ord(point) <= 56:
+                y += int(point)
+            elif point == 'p':
+                Board[x][y] = Pawn(0, x, y)
+                y += 1
+            elif point == 'P':
+                Board[x][y] = Pawn(1, x, y)
+                y += 1
+            elif point == '/':
+                x += 1
+                y = 0
+                amount_of_slash += 1
+            elif point == 'r':
+                Board[x][y] = Rook(0, x, y)
+                y += 1
+            elif point == 'R':
+                Board[x][y] = Rook(1, x, y)
+                y += 1
+            elif point == 'b':
+                Board[x][y] = Bishop(0, x, y)
+                y += 1
+            elif point == 'B':
+                Board[x][y] = Bishop(1, x, y)
+                y += 1
+            elif point == 'n':
+                Board[x][y] = Knight(0, x, y)
+                y += 1
+            elif point == 'N':
+                Board[x][y] = Knight(1, x, y)
+                y += 1
+            elif point == 'k':
+                Board[x][y] = King(0, x, y)
+                opposite_king_coord = [x, y]
+                y += 1
+            elif point == 'K':
+                Board[x][y] = King(1, x, y)
+                king_coord = [x, y]
+                y += 1
+            elif point == 'q':
+                Board[x][y] = Queen(0, x, y)
+                y += 1
+            elif point == 'Q':
+                Board[x][y] = Queen(1, x, y)
+                y += 1
+            elif point == ' ':
+                amount_of_slash += 1
+        else:
+            if fen[j] == 'w':
+                move_turn = 1
+            elif fen[j] == 'b':
+                move_turn = 0
+                king_coord += [opposite_king_coord[0], opposite_king_coord[1]]
+                opposite_king_coord = [king_coord[0], king_coord[1]]
+                king_coord = [king_coord[2], king_coord[3]]
+            elif fen[j] == 'K':
+                cast[0] = True
+            elif fen[j] == 'Q':
+                cast[1] = True
+            elif fen[j] == 'k':
+                cast[2] = True
+            elif fen[j] == 'q':
+                cast[3] = True
+            elif 48 <= ord(fen[j]) <= 57:
+                x = fen[j]
+                while j < lena - 1 and 48 <= ord(fen[j]) <= 57:
+                    j += 1
+                    x += fen[j]
+                if not fir:
+                    moves50 = int(x)
+                    fir = True
+                else:
+                    move_number = int(x)
+        j += 1
+
+
+def move_decision(move):
+    global moves50, move_turn, cast, move_number
+    if str(type(move)) == "<class 'list'>" and len(move) == 4:
+        if Board[move[0]][move[1]].__str__() not in ["p", "P"]:
+            moves50 += 1
+        else:
+            moves50 = 0
+        Board[move[2]][move[3]] = Board[move[0]][move[1]]
+        Board[move[2]][move[3]].x = move[2]
+        Board[move[2]][move[3]].y = move[3]
+        Board[move[0]][move[1]] = '.'
+        st = chr(ord("a") + move[1]) + str(8 - move[0]) + chr(ord("a") + move[3]) + str(8 - move[2])
+    elif str(type(move)) == "<class 'str'>":
+        st = castle_move(move, 7*move_turn)
+        moves50 += 1
+    else:
+        moves50 = 0
+        st = promotion(move)
+    move_turn = 1 - move_turn
+    move_number += move_turn
+    if Board[7][4] == '.' or Board[7][4].__str__() != 'K':
+        cast[0] = False
+        cast[1] = False
+    if cast[0] != 0 and (Board[7][7] == '.' or Board[7][7].__str__() != 'R'):
+        cast[0] = False
+    if cast[1] != 0 and (Board[7][0] == '.' or Board[7][0].__str__() != 'R'):
+        cast[1] = False
+    if Board[0][4] == '.' or Board[0][4].__str__() != 'k':
+        cast[2] = False
+        cast[3] = False
+    if cast[2] != 0 and (Board[0][7] == '.' or Board[0][7].__str__() != 'r'):
+        cast[2] = False
+    if cast[3] != 0 and (Board[0][0] == '.' or Board[0][0].__str__() != 'r'):
+        cast[3] = False
+    return st
+
+
+def move_from_uci(move, color):
+    if move in ["e1g1", "e8g8"]:
+        castle_move("short_castle", 7*color)
+    elif move in ["e1c1", "e8c8"]:
+        castle_move("long_castle", 7*color)
+    else:
+        y_coord = ord(move[0]) - ord('a')
+        x_coord = 8 - int(move[1])
+        y_new = ord(move[2]) - ord('a')
+        x_new = 8 - int(move[3])
+        if len(move) == 5:
+            promotion([x_coord, y_coord, x_new, y_new, move[4]])
+        else:
+            Board[x_new][y_new] = Board[x_coord][y_coord]
+            Board[x_new][y_new].x = x_new
+            Board[x_new][y_new].y = y_new
+            Board[x_coord][y_coord] = '.'
+
+
+def lichess(mas):
+    global fen, start_fen, move_turn, move_number
+    with open("save.txt", "r") as save:
+        read = save.readline()
+        if read not in ["", " "]:
+            fen = read
+            start_fen = fen
+        else:
+            start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+            fen = start_fen
+    fen_get()
+    flag = False
+    k = 0
+    for i in range(len(mas)):
+        if mas[i] == '"':
+            if not flag:
+                flag = True
+                k = i + 1
+            else:
+                mas = mas[k:i]
+    if mas:
+        move_from_uci(mas, move_turn)
+        move_turn = 1 - move_turn
+    fen = fen_code()
+    fen_get()
+    logger.info(move_number)
+    cur_moves = all_moves(move_turn)
+    logger.info(print_board())
+    logger.info(cur_moves)
+    ran = randint(0, len(cur_moves) - 1)
+    move = cur_moves[ran]
+    uci = move_decision(move)
+    fen = fen_code()
+    with open("save.txt", "w") as save:
+        save.write(fen)
+    print(uci)
+    print(print_board())
+    return uci
+
+
+def print_board():
+    printboard = ''
+    for y in range(8):
+        printboard += ''.join(map(str, Board[y])) + "\n"
+    return printboard
+
+
+def promotion(typo):
+    global move_turn
+    Board[typo[0]][typo[1]] = '.'
+    yn = str(chr(ord('a') + typo[1])) + str(8 - typo[0]) + str(chr(ord('a') + typo[3])) + str(8 - typo[2])
+    if typo[4] == "n":
+        Board[typo[2]][typo[3]] = Knight(move_turn, typo[2], typo[3])
+        return yn + "n"
+    if typo[4] == "b":
+        Board[typo[2]][typo[3]] = Bishop(move_turn, typo[2], typo[3])
+        return yn + "b"
+    if typo[4] == "r":
+        Board[typo[2]][typo[3]] = Rook(move_turn, typo[2], typo[3])
+        return yn + "r"
+    if typo[4] == "q":
+        Board[typo[2]][typo[3]] = Queen(move_turn, typo[2], typo[3])
+        return yn + "q"
+
+
+def enumeration(color):
+    global material_imbalance, nodes
+    moves = all_moves(color)
+    if not moves:
+        return []
+    sequence = []
+    seq = []
+    evals = []
+    nodes += len(moves)
+    for k in range(len(moves)):
+        sequence.append([move_decision(moves[k]), fen_code(), evaluation()])
+        evals.append([k, sequence[k][2], material_imbalance])
+        fen_get()
+        material_imbalance = False
+    lena = len(evals)
+    if color == 1:
+        best = - 1000000
+        for h in range(lena):
+            if evals[h][1] > best and not evals[h][2]:
+                best = evals[h][1]
+    else:
+        best = 1000000
+        for h in range(lena):
+            if evals[h][1] < best and not evals[h][2]:
+                best = evals[h][1]
+    h = 0
+    while h < lena:
+        if not evals[h][2] and abs(best - evals[h][1]) >= 30:
+            evals.pop(h)
+            lena -= 1
+        else:
+            h += 1
+    for h in range(lena):
+        seq.append(sequence[evals[h][0]])
+    return seq
+
+
+def all_moves(color):
+    global king_coord, result
+    turn_moves = []
+    col_moves = []
+    opturn_coord = []
+    king_coord_change = False
+    check = False
+    for a in range(8):
+        for b in range(8):
+            if Board[a][b] != '.':
+                if Board[a][b].color == color:
+                    turn_moves += Board[a][b].moves()
+                else:
+                    opturn_coord += [[a, b]]
+    for i in range(len(turn_moves)):
+        piece = Board[turn_moves[i][2]][turn_moves[i][3]]
+        if Board[turn_moves[i][0]][turn_moves[i][1]].__str__() in ['k', 'K']:
+            king_coord = [turn_moves[i][2], turn_moves[i][3]]
+            king_coord_change = True
+        Board[turn_moves[i][2]][turn_moves[i][3]] = Board[turn_moves[i][0]][turn_moves[i][1]]
+        Board[turn_moves[i][0]][turn_moves[i][1]] = '.'
+        Board[turn_moves[i][2]][turn_moves[i][3]].x = turn_moves[i][2]
+        Board[turn_moves[i][2]][turn_moves[i][3]].y = turn_moves[i][3]
+        moves = []
+        for j in range(len(opturn_coord)):
+            moves += Board[opturn_coord[j][0]][opturn_coord[j][1]].moves()
+        for h in range(len(moves)):
+            if [moves[h][2], moves[h][3]] == king_coord:
+                check = True
+        if check:
+            check = False
+        else:
+            col_moves.append(turn_moves[i])
+        if king_coord_change:
+            king_coord = [turn_moves[i][0], turn_moves[i][1]]
+            king_coord_change = False
+        Board[turn_moves[i][0]][turn_moves[i][1]] = Board[turn_moves[i][2]][turn_moves[i][3]]
+        Board[turn_moves[i][2]][turn_moves[i][3]] = piece
+        Board[turn_moves[i][0]][turn_moves[i][1]].x = turn_moves[i][0]
+        Board[turn_moves[i][0]][turn_moves[i][1]].y = turn_moves[i][1]
+    moves = []
+    for j in range(len(opturn_coord)):
+        moves += Board[opturn_coord[j][0]][opturn_coord[j][1]].moves()
+    for h in range(len(moves)):
+        if [moves[h][2], moves[h][3]] == king_coord:
+            check = True
+    if not col_moves:
+        if not check:
+            result = '1/2-1/2'
+        else:
+            if color == 1:
+                result = '0-1'
+            else:
+                result = '1-0'
+    if result != '*':
+        return []
+    else:
+        if not check:
+            mt = 7 * color
+            if cast[(1 - color) * 2] and Board[mt][5] == '.' and Board[mt][6] == '.' and [mt, 5] not in moves and [mt, 6] not in moves:
+                col_moves.append('short_castle')
+            if cast[(1 - color) * 2 + 1] and Board[mt][3] == '.' and Board[mt][2] == '.' and Board[mt][1] == '.' and [mt, 3] not in moves and [mt, 2] not in moves and [mt, 1] not in moves:
+                col_moves.append('long_castle')
+    return col_moves
+
+
+def evaluation():
+    global material_imbalance
+    evalu = 0
+    for k in range(8):
+        for p in range(8):
+            if Board[k][p] != '.':
+                if Board[k][p].__str__() == 'p':
+                    evalu -= 100
+                if Board[k][p].__str__() == 'n':
+                    evalu -= 300
+                if Board[k][p].__str__() == 'b':
+                    evalu -= 320
+                if Board[k][p].__str__() == 'r':
+                    evalu -= 450
+                if Board[k][p].__str__() == 'q':
+                    evalu -= 900
+                if Board[k][p].__str__() == 'k':
+                    evalu -= 30000
+                if Board[k][p].__str__() == 'P':
+                    evalu += 100
+                if Board[k][p].__str__() == 'N':
+                    evalu += 300
+                if Board[k][p].__str__() == 'B':
+                    evalu += 320
+                if Board[k][p].__str__() == 'R':
+                    evalu += 450
+                if Board[k][p].__str__() == 'Q':
+                    evalu += 900
+                if Board[k][p].__str__() == 'K':
+                    evalu += 30000
+    if evalu != 0:
+        material_imbalance = True
+    if move_number <= 10:
+        evalu += opening()
+    return evalu
+
+
+def opening():
+    global move_number, move_turn
+
+    def check_queen():  # in fen_get()
+        for a in range(7):
+            for b in range(7):
+                if Board[a][b] != '.' and Board[a][b].__str__() == chr(ord("Q") + 32 * (1 - move_turn)):
+                    return 1
+        return 0
+
+    evalu = 0
+    white_dev_pieces = 0
+    black_dev_pieces = 0
+    if Board[4][3] != '.' and Board[4][3].__str__() == 'P':  # d4
+        evalu += 50
+        if move_number in [1, 2] and Board[3][4] != '.' and Board[3][4].__str__() == 'p':  # d4-e5
+            evalu += 50
+    if Board[3][3] != '.' and Board[3][3].__str__() == 'p':
+        evalu -= 50
+        if move_turn == 1 and move_number in [1, 2] and Board[4][4] != '.' and Board[4][4].__str__() == 'P':
+            evalu += 40
+    if Board[4][4] != '.' and Board[4][4].__str__() == 'P':
+        evalu += 60
+    if Board[3][4] != '.' and Board[3][4].__str__() == 'p':
+        evalu -= 60
+    if Board[5][0] != '.' and Board[5][0].__str__() == 'N':
+        evalu -= 50
+    if Board[5][7] != '.' and Board[5][7].__str__() == 'N':
+        evalu -= 50
+    if Board[2][0] != '.' and Board[2][0].__str__() == 'n':
+        evalu += 50
+    if Board[2][7] != '.' and Board[2][7].__str__() == 'n':
+        evalu += 50
+    if Board[5][2] != '.' and Board[5][2].__str__() == 'N':
+        evalu += 40
+        if Board[6][2] != '.' and Board[6][2].__str__() == 'P':
+            evalu -= 20
+    if Board[5][5] != '.' and Board[5][5].__str__() == 'N':
+        evalu += 40
+        if Board[3][4] != '.' and Board[3][4].__str__() == 'p' and move_number == 2:
+            evalu += 50
+    if Board[2][2] != '.' and Board[2][2].__str__() == 'n':
+        evalu -= 40
+        if Board[1][2] != '.' and Board[1][2].__str__() == 'p':
+            evalu += 20
+    if Board[2][5] != '.' and Board[2][5].__str__() == 'n':
+        evalu -= 40
+    if Board[5][2] != '.' and Board[5][2].__str__() == 'P':
+        evalu += 20
+    if Board[2][2] != '.' and Board[2][2].__str__() == 'p':
+        evalu -= 20
+    if Board[2][3] != '.' and Board[2][3].__str__() == 'p':
+        evalu -= 10
+    if Board[5][3] != '.' and Board[5][3].__str__() == 'P':
+        evalu += 10
+    if Board[1][5] == '.':  # check if we have opposite color queen
+        evalu += 80
+        if check_queen() == 0:
+            evalu -= 70
+        if Board[1][7] == '.':
+            if check_queen() == 0:
+                evalu -= 45
+            evalu += 60
+    if Board[6][5] == '.':
+        if check_queen() == 0:
+            evalu += 70
+        evalu -= 80
+        if Board[6][7] == '.':
+            if check_queen() == 0:
+                evalu += 45
+            evalu -= 60
+    if Board[3][5] != '.' and Board[3][5].__str__() == 'p':
+        evalu -= 20
+    if Board[4][5] != '.' and Board[4][5].__str__() == 'P':
+        evalu += 20
+    if Board[5][0] != '.' and Board[5][0].__str__() == 'P':
+        evalu += 10
+    if Board[2][0] != '.' and Board[2][0].__str__() == 'p':
+        evalu -= 10
+    if Board[5][1] != '.' and Board[5][1].__str__() == 'P':
+        evalu += 20
+    if Board[2][1] != '.' and Board[2][1].__str__() == 'p':
+        evalu -= 20
+    if Board[5][7] != '.' and Board[5][7].__str__() == 'P':
+        evalu += 20
+    if Board[2][7] != '.' and Board[2][7].__str__() == 'p':
+        evalu -= 20
+    if (Board[7][3] != '.' and Board[7][3].__str__() == 'K') or (Board[7][4] != '.' and Board[7][4].__str__() == 'K') or (Board[7][5] != '.' and Board[7][5].__str__() == 'K'):
+        if not cast[0]:
+            evalu -= 90
+        if not cast[1]:
+            evalu -= 15
+    if (Board[0][3] != '.' and Board[0][3].__str__() == 'k') or (Board[0][4] != '.' and Board[0][4].__str__() == 'k') or (Board[0][5] != '.' and Board[0][5].__str__() == 'k'):
+        if not cast[2]:
+            evalu += 90
+        if not cast[3]:
+            evalu += 15
+    if Board[4][6] != '.' and Board[4][6].__str__() == 'P':
+        evalu -= 130
+    if Board[3][6] != '.' and Board[4][6].__str__() == 'p':
+        evalu += 130
+    if Board[4][1] != '.' and Board[4][1].__str__() == 'P':
+        evalu -= 50
+    if Board[3][1] != '.' and Board[3][1].__str__() == 'p':
+        evalu += 50
+    if Board[5][4] != '.' and Board[5][4].__str__() == 'P':
+        evalu += 35
+        if Board[5][3] == '.' or Board[5][3].__str__() != 'P':
+            evalu -= 30
+        if Board[5][2] == '.' or Board[5][2].__str__() != 'P':
+            evalu -= 35
+    if Board[2][4] != '.' and Board[2][4].__str__() == 'p':
+        evalu -= 35
+        if Board[2][3] == '.' or Board[2][3].__str__() != 'p':
+            evalu += 30
+        if Board[2][2] == '.' or Board[2][2].__str__() != 'p':
+            evalu += 35
+    if Board[5][6] != '.' and Board[5][6].__str__() == 'P':
+        evalu += 15
+    if Board[2][6] != '.' and Board[2][6].__str__() == 'p':
+        evalu -= 15
+    if Board[4][7] != '.' and Board[4][7].__str__() == 'P':
+        evalu -= 30
+    if Board[3][7] != '.' and Board[3][7].__str__() == 'p':
+        evalu += 30
+    if Board[3][2] != '.' and Board[3][2].__str__() == 'p':
+        evalu -= 40
+    if Board[4][2] != '.' and Board[4][2].__str__() == 'P':
+        evalu += 40
+    # Добавить оценку позиций слонов
+    # Добавить оцнеку слабых и изолированных пешек
+    # Добавить оценку положениям ферзя. чтобы машина не стремилась ходить ферзём в некоторых позициях
+    # Добавить, чтобы оно не ходило одной и той же фигурой дважды
+    if Board[7][1] == '.':
+        white_dev_pieces += 1
+    if Board[7][2] == '.':
+        white_dev_pieces += 1
+    if Board[7][5] == '.':
+        white_dev_pieces += 1
+    if Board[7][6] == '.':
+        white_dev_pieces += 1
+    if Board[0][1] == '.':
+        black_dev_pieces += 1
+    if Board[0][2] == '.':
+        black_dev_pieces += 1
+    if Board[0][5] == '.':
+        black_dev_pieces += 1
+    if Board[0][6] == '.':
+        black_dev_pieces += 1
+    evalu += (white_dev_pieces - black_dev_pieces) * 30
+    return evalu
+
+
+# def pawn_structure():
+#     white_pawn_islands = 0
+#     black_pawn_islands = 0
+
+
+def search():
+    global start_fen, fen, filename, reached_depth, nodes, first_depth, result
+    time_for_nodes = perf_counter()
+    start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    fen = start_fen
+    fen_get()
+    got = enumeration(move_turn)
+    if first_depth:
+        with open(filename[0], "w") as f:
+            for d in range(len(got)):
+                f.write(str(got[d])[1:len(str(got[d])) - 1] + "\n")
+        reached_depth += 1
+        first_depth = False
+    while reached_depth < depth:
+        with open(filename[0], "r") as file:
+            previous = ["1"]
+            with open(filename[1], "w") as f2:
+                while previous:
+                    previous = read_str(file.readline(), 0)
+                    if previous:
+                        fen = previous[1]
+                        fen_get()
+                        got = enumeration(move_turn)
+                        if got:
+                            for f in range(len(got)):
+                                got[f][0] = previous[0] + " " + got[f][0]
+                            for f in range(len(got)):
+                                f2.write(str(got[f])[1:len(str(got[f])) - 1] + "\n")
+                        else:
+                            gr = str(previous)[1:len(str(previous)) - 1] + " "
+                            if result == "1-0":
+                                gr += '30000'
+                            if result == '0-1':
+                                gr += '-30000'
+                            raise Exception(gr)
+        filename = [filename[1], filename[0]]
+        reached_depth += 1
+        print("Current depth: ", reached_depth)
+        print(nodes, " positions checked")
+        print()
+    time_for_nodes = perf_counter() - time_for_nodes
+    return [nodes, time_for_nodes]
+
+
+def read_str(st, eval_need):
+    # returns an array in which all variables are written
+    lena = len(st)
+    if lena == 0:
+        return 0
+    mars = []
+    start = 1
+    c = False
+    for count in range(lena):
+        if st[count] == ',':
+            if c:
+                mars.append(st[start + 1:count - 1])
+            else:
+                mars.append(st[start:count - 1])
+            start = count + 2
+            c = True
+    if eval_need == 1:
+        mars.append(int(st[start:lena - 1]))
+    return mars
+
+
+def step_back(st, n):
+    # returns move sequence with step back
+    for i in range(len(st)):
+        if st[len(st) - 1 - i] == " ":
+            if n == 1:
+                st = st[:len(st) - 1 - i]
+                return st
+            else:
+                n -= 1
+
+
+def table(cur, best):
+    # helps to cieve moves, maybe we need to check or even delete and search for ties not for variations
+    dif = abs(best - cur)
+    if abs(best) < 50:
+        if dif <= 30:
+            return True
+        else:
+            return False
+    if abs(best) < 100:
+        if dif <= 40:
+            return True
+        else:
+            return False
+    if abs(best) < 150:
+        if dif <= 50:
+            return True
+        else:
+            return False
+    if abs(best) < 300:
+        if dif <= 70:
+            return True
+        else:
+            return False
+    if abs(best) >= 300:
+        if dif <= 120:
+            return True
+
+
+def minimax(target, d):
+    # В принципе неправильная работа алгоритма, алгоритм отсекает лучшие варианты за другой цвет
+    # Помечать позиции, имеющие оценку не best, чтобы при изучении дерева вариантов, они не учитывались
+    # Тем не менее, эти позиции необхожимо рассматривать дальше
+    global move_turn
+    name = [target, "minimax.txt"]
+    stop_flag = False
+    mas = []
+    line = "1"
+    for f in range(d):
+        with open(name[0], "r") as reading:
+            with open(name[1], "w") as writing:
+                while line != "" or not stop_flag:
+                    if not mas:
+                        line = reading.readline()
+                        line = read_str(line, 1)
+                        sequence = step_back(line[0], f + 1)
+                        mas.append(line)
+                        new_sequence = sequence
+                    else:
+                        new_sequence = step_back(mas[0][0], f + 1)
+                        sequence = new_sequence
+                    while new_sequence == sequence:
+                        line = reading.readline()
+                        if line == "":
+                            stop_flag = True
+                            break
+                        line = read_str(line, 1)
+                        new_sequence = step_back(line[0], f + 1)
+                        if new_sequence == sequence:
+                            mas.append(line)
+                    if move_turn == 1:
+                        best = -100000
+                        for i in range(len(mas)):
+                            if mas[i][2] > best:
+                                best = mas[i][2]
+                    else:
+                        best = 100000
+                        for i in range(len(mas)):
+                            if mas[i][2] < best:
+                                best = mas[i][2]
+                    for i in range(len(mas)):
+                        # if table(mas[i][2], best):
+                        #     writing.write(str(mas[i])[1:len(str(mas[i])) - 1] + "\n")  # mark not the best moves
+                        if mas[i][2] == best:
+                            writing.write(str(mas[i])[1:len(str(mas[i])) - 1] + "\n")
+                    mas = [line]
+        move_turn = 1 - move_turn
+        if f == 0:
+            name = ["minimax2.txt", "minimax.txt"]
+        name = [name[1], name[0]]
+        mas = []
+        line = " "
+
+
+def main():
+    global reached_depth, filename
+    mas = search()
+    print("Reached depth: ", reached_depth)
+    print("Positions checked: ", mas[0])
+    print("Time used: ", mas[1])
+    print(str(mas[0] // mas[1]) + " positions per second")
+    print("NOE #3")
+
+
+def best_move():
+    best = -30000
+    mas = []
+    with open("minimax.txt", "r") as f:
+        m = f.readline()
+        while m != '':
+            mas.append(read_str(m, 1))
+            m = f.readline()
+    for i in range(len(mas)):
+        if mas[i][2] > best:
+            print(mas[i])
+            best = mas[i][2]
+
+
+def threading():
+    global args, first_depth, depth, fen, filename
+    args = sys.argv[1:]
+    if args[0] == '1':
+        first_depth = True
+        depth = 1
+        fen = args[1]
+    else:
+        first_depth = False
+        depth = int(args[1])
+        filename = [args[2], args[3]]
+    search()
+    file = open("config.txt", "a")
+    file.write(str(nodes) + "\n")
+    file.close()
+
+
+if __name__ == "__main__":
+    main()
