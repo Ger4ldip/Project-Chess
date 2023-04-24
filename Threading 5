@@ -1,0 +1,65 @@
+import subprocess as sp
+from time import perf_counter
+nodes = 0
+file = open("config.txt", "w")
+file.close()
+sta = perf_counter()
+name_list = ['1.txt', '2.txt', '3.txt', '4.txt', '5.txt', '6.txt', '7.txt', '8.txt', '9.txt', '10.txt', '11.txt', '12.txt', '13.txt', '14.txt', '15.txt', '16.txt', '17.txt', '18.txt', '19.txt', '20.txt', '21.txt', '22.txt', '23.txt', '24.txt', '25.txt', '26.txt', '27.txt', '28.txt', '29.txt', '30.txt', '31.txt', '32.txt']
+fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+array = []
+
+
+def read_str(st):
+    lena = len(st)
+    if lena == 0:
+        return 0
+    mars = []
+    start = 1
+    c = False
+    for count in range(lena):
+        if st[count] == ',':
+            if c:
+                mars.append(st[start + 1:count - 1])
+            else:
+                mars.append(st[start:count - 1])
+            start = count + 2
+            c = True
+    mars.append(int(st[start:lena - 1]))
+    return mars
+
+
+procstart = sp.Popen(['C:/Users/redak/OneDrive/Desktop/pypy3.9-v7.3.9-win64/pypy3.9-v7.3.9-win64/python3.exe', r'C:/Users/redak/PycharmProjects/Chess_last/NOE #3 thread.py', '2', fen])
+procstart.communicate()
+with open("second.txt", "r") as r:
+    previous = ["1"]
+    while previous:
+        previous = r.readline()
+        if previous:
+            array.append(read_str(previous))
+with open("1.txt", "w") as w:
+    w.write(str(array[0])[1:len(str(array[0])) - 1] + "\n")
+with open("3.txt", "w") as w:
+    w.write(str(array[1])[1:len(str(array[1])) - 1] + "\n")
+with open("5.txt", "w") as w:
+    w.write(str(array[2])[1:len(str(array[2])) - 1] + "\n")
+with open("7.txt", "w") as w:
+    w.write(str(array[3])[1:len(str(array[3])) - 1] + "\n")
+proc1 = sp.Popen(['C:/Users/redak/OneDrive/Desktop/pypy3.9-v7.3.9-win64/pypy3.9-v7.3.9-win64/python3.exe', r'C:/Users/redak/PycharmProjects/Chess_last/NOE #3 thread.py', '0', '6', '1.txt', '2.txt'])
+proc2 = sp.Popen(['C:/Users/redak/OneDrive/Desktop/pypy3.9-v7.3.9-win64/pypy3.9-v7.3.9-win64/python3.exe', r'C:/Users/redak/PycharmProjects/Chess_last/NOE #3 thread.py', '0', '6', '3.txt', '4.txt'])
+proc3 = sp.Popen(['C:/Users/redak/OneDrive/Desktop/pypy3.9-v7.3.9-win64/pypy3.9-v7.3.9-win64/python3.exe', r'C:/Users/redak/PycharmProjects/Chess_last/NOE #3 thread.py', '0', '6', '5.txt', '6.txt'])
+proc4 = sp.Popen(['C:/Users/redak/OneDrive/Desktop/pypy3.9-v7.3.9-win64/pypy3.9-v7.3.9-win64/python3.exe', r'C:/Users/redak/PycharmProjects/Chess_last/NOE #3 thread.py', '0', '6', '7.txt', '8.txt'])
+proc1.communicate()
+proc2.communicate()
+proc3.communicate()
+proc4.communicate()
+with open("config.txt", "r") as r:
+    a = r.readline()
+    nodes += int(a)
+    while a:
+        a = r.readline()
+        if a:
+            nodes += int(a)
+print("Threading 5")
+print("Summary positions checked: ", nodes)
+print("Time used: ", perf_counter() - sta)
+print(nodes//(perf_counter() - sta), " positions per second")
