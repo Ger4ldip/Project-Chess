@@ -1,8 +1,7 @@
 # ChVsS
 
 2022 
-10-3 Павлов И.Г. , Коровин М.М.
-10-4 Тьебо А.Е.
+11б Павлов И.Г
 Python, C#;
 Приложение собирается работать с сайтом https://lichess.org/
 
@@ -92,8 +91,8 @@ Python, C#;
 ### Подключение
 Чтобы подключить движок к lichess вам надо скачать оболочку по ссылке выше и заменить файлы на хранящиеся в этом репозитории
 
-#### доска, да просто доска, нинаю зочем, марк попросил
-![a](https://user-images.githubusercontent.com/113096503/223968676-473ead2a-9e6b-42b3-b1fc-f3ea8d9fe296.png)
+#### доска, да просто доска, нинаю зочем
+![a](user-images.githubusercontent.com/113096503/223968676-473ead2a-9e6b-42b3-b1fc-f3ea8d9fe296.png)
 
 ### Наш FAN движок
 https://datalore.jetbrains.com/notebook/zv3h4nG3nlpHDDNvqvbJeh/SA4UiAYBSKgRGfwC6w3i6l/
